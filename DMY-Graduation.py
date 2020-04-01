@@ -6,6 +6,8 @@ Last edited: June 13,2019
 import PIL
 import tkinter as tk
 import matplotlib.pyplot as plt
+import cv2
+from skimage import morphology,draw
 import numpy as np
 from tkinter import filedialog
 from tkinter import *
@@ -135,78 +137,162 @@ def Imghelp():
 
 
 #图像处理功能实现模块
-#图像灰度化
-def ImgGray():
+
+#图像灰度化+图像增强
+def ImgGrayEhance():
     global img_png
     global img_tep
     img_tep=img_png.copy()
+
+    img = np.asarray(img_png)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    ret, binary = cv2.threshold(gray, 175, 255, cv2.THRESH_BINARY)
+
+    img1, contours, hierarchy = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    print(type(contours))
+    print(type(contours[0]))
+    print(len(contours))
+    for i in range(71, len(contours)):
+        x, y, w, h = cv2.boundingRect(contours[i])
+        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 2)
+    # x, y, w, h = cv2.boundingRect(contours[52])
+    # print(x,y,x+w,y+h)
+    # cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 1)
+
+    # cv2.drawContours(img, contours, -1, (0, 0, 255), 1)
+    cv2.imshow("img", img)
+
+    # 图像灰度化
     img_png = img_png.convert('L')    #调用Image中的函数
+
+    # 图像增强
+    img_png = ImageEnhance.Brightness(img_png).enhance(1.0)  # 亮度增强 1.0为原始图像
+    img_png = ImageEnhance.Color(img_png).enhance(1.0)  # 色度增强 1.0为原始图像
+    img_png = ImageEnhance.Contrast(img_png).enhance(1.5)  # 对比度增强
+    img_png = ImageEnhance.Contrast(img_png).enhance(1.5)  # 锐化增强
 
     canvas.delete(ALL)
     photo = ImageTk.PhotoImage(img_png)
     canvas.create_image(int(window.winfo_width() /2),0,anchor='n',image=photo)
     canvas.image=photo
 
-#图像增强
-def ImgGrayEnhance():
+# 图像二值化反转
+def ImgBinary_INV():
     global img_png
     global img_tep
     img_tep = img_png.copy()
-    img_png=img_png.convert('L')    #先对图片灰度化
 
-    img_png = ImageEnhance.Brightness(img_png).enhance(1.0) #亮度增强 1.0为原始图像
-    img_png = ImageEnhance.Color(img_png).enhance(1.0) #色度增强 1.0为原始图像
-    img_png = ImageEnhance.Contrast(img_png).enhance(1.5) #对比度增强
-    img_png = ImageEnhance.Contrast(img_png).enhance(1.5) #锐化增强
-
+    # img_png = Image.fromarray()
 
     canvas.delete(ALL)
     photo = ImageTk.PhotoImage(img_png)
-    canvas.create_image(int(window.winfo_width()/ 2), 0, anchor='n', image=photo)
+    canvas.create_image(int(window.winfo_width() / 2), 0, anchor='n', image=photo)
     canvas.image = photo
 
-#大小相同的图片相加
-def ImgAdd():
+# 骨架提取
+def ImgSkeleton():
     global img_png
     global img_tep
     img_tep = img_png.copy()
-    img1=img_png
-    file_path = filedialog.askopenfilename(title='选择文件', filetype=[('all files', '.*'), ('JPG', '.jpg')])
-    img2= Image.open(file_path)
-    img2 = resize(Mywidth, Myheight, img2)
 
-    if img1.size==img2.size and img1.mode==img2.mode:
-        img_png=Image.blend(img1,img2,0.5)
-        canvas.delete(ALL)
-        photo = ImageTk.PhotoImage(img_png)
-        canvas.create_image(int(window.winfo_width()  / 2), 0, anchor='n', image=photo)
-        canvas.image = photo
-    else:
-        top=Toplevel()
-        top.geometry("300x200")
-        top.title('错误提示')
-        imglabel=Label(top,anchor='center',text='图片属性不一致',font=('微软雅黑',15),width=20,height=30)
-        imglabel.pack()
+    im = np.asarray(img_png) #将PIL转换为np数组格式
+    element = cv2.getStructuringElement(cv2.MORPH_CROSS,(3,3)) #卷积核，定义一个3x3的十字形结构元素
 
+    skel = np.zeros(im.shape, np.uint8) #骨架图，初始化是原图
+    erode = np.zeros(im.shape, np.uint8)
+    temp = np.zeros(im.shape, np.uint8)
 
-#对数变化
-def Imglog():
-    global img_png
-    global img_tep
-    img_tep = img_png.copy()
-    img_png=np.array(img_png)
-    c = 255 / np.log(256)
-    row, column = img_png.shape[0], img_png.shape[1]
-    for i in range(row):
-        for j in range(column):
-            img_png[i][j]=c*np.log(1.0+img_png[i][j])
+    i = 0
+    while True:
+        # 图像腐蚀
+        erode = cv2.erode(im, element)
+        #图像膨胀
+        temp = cv2.dilate(erode, element)
 
-    img_png=Image.fromarray(np.uint8(img_png))
+        # 消失的像素是skeleton的一部分
+        temp = cv2.subtract(im, temp)   #相减，im-temp即消失的部分，也就是轮廓的一部分
+        # cv2.imshow('skeleton part %d' % (i,), temp)
+        skel = cv2.bitwise_or(skel, temp) #或运算，将删除的部分添加到骨架图
+        im = erode.copy()
+
+        if cv2.countNonZero(im) == 0:
+            break
+        i += 1
+
+    # 将opencv格式转换回PIL
+    img_png = Image.fromarray(skel)
+
     canvas.delete(ALL)
     photo = ImageTk.PhotoImage(img_png)
-    canvas.create_image(int(Mywidth / 2), 0, anchor='n', image=photo)
+    canvas.create_image(int(window.winfo_width() / 2), 0, anchor='n', image=photo)
     canvas.image = photo
 
+# 去噪点
+def ImgNoiseRemoval():
+    global img_png
+    global img_tep
+    img_tep = img_png.copy()
+
+    im = np.asarray(img_png) #将PIL转换为np数组格式
+    # 根据连通域面积去除噪点
+    _, labels, stats, centroids = cv2.connectedComponentsWithStats(im)
+    i = 0
+    for istat in stats:
+        if istat[4] < 1.2:
+            if istat[3] > istat[4]:
+                r = istat[3]
+            else:
+                r = istat[4]
+            cv2.rectangle(im, tuple(istat[0:2]), tuple(istat[0:2] + istat[2:4]), 0, thickness=-1)  # 26
+        i = i + 1
+    # 将opencv格式转换回PIL
+    img_png = Image.fromarray(im)
+
+    canvas.delete(ALL)
+    photo = ImageTk.PhotoImage(img_png)
+    canvas.create_image(int(window.winfo_width() / 2), 0, anchor='n', image=photo)
+    canvas.image = photo
+
+#霍夫直线检测
+def ImgHough_line():
+    global img_png
+    global img_tep
+    img_tep = img_png.copy()
+
+    im = np.asarray(img_png) #将PIL转换为np数组格式
+
+    edges = cv2.Canny(im, 150, 150, apertureSize=3)  # apertureSize参数默认其实就是3
+    cv2.imshow("edges", edges)
+    lines = cv2.HoughLines(edges, 1, np.pi / 180, 80)
+    for line in lines:
+        rho, theta = line[0]  # line[0]存储的是点到直线的极径和极角，其中极角是弧度表示的。
+        a = np.cos(theta)  # theta是弧度
+        b = np.sin(theta)
+        x0 = a * rho  # 代表x = r * cos（theta）
+        y0 = b * rho  # 代表y = r * sin（theta）
+        x1 = int(x0 + 1000 * (-b))  # 计算直线起点横坐标
+        y1 = int(y0 + 1000 * a)  # 计算起始起点纵坐标
+        x2 = int(x0 - 1000 * (-b))  # 计算直线终点横坐标
+        y2 = int(y0 - 1000 * a)  # 计算直线终点纵坐标    注：这里的数值1000给出了画出的线段长度范围大小，数值越小，画出的线段越短，数值越大，画出的线段越长
+        cv2.line(im, (x1, y1), (x2, y2), (0, 0, 255), 2)  # 点的坐标必须是元组，不能是列表。
+    cv2.imshow("image-lines", im)
+
+    # # 统计概率霍夫线变换
+    # edges = cv2.Canny(im, 50, 150, apertureSize=3)  # apertureSize参数默认其实就是3
+    # lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 60, minLineLength=60, maxLineGap=5)
+    # for line in lines:
+    #     x1, y1, x2, y2 = line[0]
+    #     cv2.line(im, (x1, y1), (x2, y2), (0, 0, 255), 2)
+    # cv2.imshow("line_detect_possible_demo", im)
+
+    # 将opencv格式转换回PIL
+    img_png = Image.fromarray(im)
+
+    canvas.delete(ALL)
+    photo = ImageTk.PhotoImage(img_png)
+    canvas.create_image(int(window.winfo_width() / 2), 0, anchor='n', image=photo)
+    canvas.image = photo
 #Log图像锐化
 def Logsharpen():
     global img_png
@@ -250,7 +336,6 @@ def ImgOstu():
     global img_tep
     img_tep = img_png.copy()
 
-    img_png=img_png.convert('L')
     img_png = np.array(img_png)
     Imgh,Imgw = img_png.shape[0],img_png.shape[1]
     MN = Imgh*Imgw
@@ -305,7 +390,7 @@ def ImgOstu():
 window=Tk()
 
 #第2步，给窗口可视化取名字
-window.title('DIP')
+window.title('MIP')
 window.update()
 
 #第3步，设定窗口大小（宽*高）
@@ -335,10 +420,11 @@ menubar.add_cascade(label='编辑',menu=editmenu)
 
 #第8步，创建一个功能菜单
 funmenu=Menu(menubar,tearoff=0)
-funmenu.add_command(label='图像灰度化', command=ImgGray)
-funmenu.add_command(label='图像增强', command=ImgGrayEnhance)
-funmenu.add_command(label='大小相同图像相加', command=ImgAdd)
-funmenu.add_command(label='对数变换', command=Imglog)
+funmenu.add_command(label='图像灰度化和增强', command=ImgGrayEhance)
+funmenu.add_command(label='图像二值化反转', command=ImgBinary_INV)
+funmenu.add_command(label='骨架提取', command=ImgSkeleton)
+funmenu.add_command(label='去除噪点', command=ImgNoiseRemoval)
+funmenu.add_command(label='霍夫变换', command=ImgHough_line)
 funmenu.add_command(label='LoG算子图像锐化', command=Logsharpen)
 funmenu.add_command(label='Ostu图像分割', command=ImgOstu)
 menubar.add_cascade(label='功能',menu=funmenu)
