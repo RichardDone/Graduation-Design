@@ -4,8 +4,6 @@ import matplotlib.pyplot as plt
 from PIL import Image,ImageTk,ImageFilter,ImageEnhance
 import math
 from skimage import measure,color,morphology,img_as_ubyte,img_as_float,transform
-from scipy.optimize import curve_fit
-from scipy import asarray as ar,exp
 
 def opencv2skimage(any_opencv_image):
     sk_image = img_as_float(any_opencv_image)
@@ -288,9 +286,6 @@ print("叶片的数量为：",len(img_leaf))
 
 # showImage(im)
 
-
-leaf1 = img_leaf[4]
-
 for leaf_i in range(len(img_leaf)):
     leaf1 = img_leaf[leaf_i]
     k= 3
@@ -298,8 +293,6 @@ for leaf_i in range(len(img_leaf)):
     while k>0:
         leaf1 = cv2.erode(leaf1, element)
         k-=1
-    # plt.imshow(opencv2skimage(leaf1))
-    # plt.show()
     x=[]
     y=[]
     for i in range(leaf1.shape[1]):
@@ -311,40 +304,23 @@ for leaf_i in range(len(img_leaf)):
     f1 = np.polyfit(x, y, 5)
     p1 = np.poly1d(f1)
     yvals = p1(x)
+
+    # 计算每个叶片的长度，即曲线长度
+    area_list = []  # 存储每一微小步长的曲线长度
+    for i in range(1,len(x)):
+        # 计算每一微小步长的曲线长度，dx = x_{i}-x{i-1}，索引从1开始
+        dl_i = np.sqrt( (x[i]-x[i-1])**2 + (yvals[i]-yvals[i-1])**2 )
+        # 将计算结果存储起来
+        area_list.append(dl_i)
+    area = sum(area_list)  # 求和计算曲线在t:[0,2*pi]的长度
+    area = area/24*0.635   # 24个像素=0.635厘米
+
+    print("第",leaf_i+1,"个叶片：{:.4f}厘米".format(area))
+
     plt.plot(x, yvals, 'r')
-# def func3(x, a1, a2, m1, m2, s1, s2, a3, m3, s3):
-#     return a1 * np.exp(-((x - m1) / s1) ** 2) + a2 * np.exp(-((x - m2) / s2) ** 2)+ a3 * np.exp(-((x - m3) / s3) ** 2)
-#
-# a1,a2,m1,m2,s1,s2,a3, m3, s3 = curve_fit(func3, x, y)[0]
-#
-# yvals = func3(x,a1, a2,  m1, m2,  s1, s2,a3, m3, s3)
-#
-# plt.plot(x,yvals,"red")
-
-
-# def gauss_fitting(x, A1, b1, w1, A2, b2, w2):
-#     y1 = (A1 / (w1 * math.sqrt(math.pi / 2))) * np.exp(-2 * ((x - b1) / w1) ** 2)
-#     y2 = (A2 / (w2 * math.sqrt(math.pi / 2))) * np.exp(-2 * ((x - b2) / w2) ** 2)
-#     return y1 + y2
-#
-# A1,b1,w1,A2,b2,w2 = curve_fit(gauss_fitting, x, y)[0]
-# yvals = gauss_fitting(x, A1, b1, w1, A2, b2, w2)
-# plt.plot(x,yvals,"red")
-
-# def func3(x, a1, m1, s1):
-#     return a1 * np.exp(-((x - m1) / s1) ** 2)
-#
-# popt, pcov = curve_fit(func3, x, y)
-# a1 = popt[0]
-# m1 = popt[1]
-# s1 = popt[2]
-#
-# yvals = func3(x,a1,m1,s1)
-# plt.plot(x,yvals,"red")
 
     plt.imshow(opencv2skimage(leaf1))
     plt.show()
-
 
 
 
