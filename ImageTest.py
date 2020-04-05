@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from PIL import Image,ImageTk,ImageFilter,ImageEnhance
 import math
 from skimage import measure,color,morphology,img_as_ubyte,img_as_float,transform
+import pandas as pd
 
 def opencv2skimage(any_opencv_image):
     sk_image = img_as_float(any_opencv_image)
@@ -12,7 +13,6 @@ def opencv2skimage(any_opencv_image):
 def skimage2opencv(any_skimage_image):
     op_image = img_as_ubyte(any_skimage_image)
     return op_image
-
 
 def angle(x1,y1,x2,y2):
     if y1==y2:
@@ -200,20 +200,6 @@ while i>0:
 # 标记各个连通域
 labels = measure.label(img_extract, connectivity=2)
 
-# dst=color.label2rgb(labels)
-# print("labels:",labels.max()+1)
-# dst=morphology.remove_small_objects(im3,min_size=20,connectivity=1)
-# plt.imshow(dst)
-# plt.show()
-# dst = skimage2opencv(dst)
-# showImage(dst)
-
-# i= 3
-# element = cv2.getStructuringElement(cv2.MORPH_CROSS, (5, 5))  # 卷积核，定义一个5x5的十字形结构元素
-# while i>0:
-#     im3 = cv2.erode(im3, element)
-#     i-=1
-
 # 定义数组存储分割出来的叶片骨架
 img_leaf = []
 
@@ -246,45 +232,49 @@ for region in measure.regionprops(labels):
 print("叶片的数量为：",len(img_leaf))
 
 # 存储叶片角度
-# array_angel = []
-#
-# for i in range(len(img_leaf)):
-#     leaf = img_leaf[i]
-#
-#     k= 3
-#     element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))  # 卷积核，定义一个3x3的十字形结构元素
-#     while k>0:
-#         leaf = cv2.erode(leaf, element)
-#         k-=1
-    #
-    # leaf_height, leaf_width = leaf.shape
-    # leaf_y = int((2 / 3) * leaf_height)
-    # leaf_x = int((2 / 3) * leaf_width)
+array_angel = []
 
-#     for y in range(leaf_height):
-#         if (y == leaf_y):
-#             for x in range(leaf_width):
-#                 if (leaf[y, x] == 255):
-#                     leaf_x = x
-#                     break
-#         if (y > leaf_y):
-#             break
-#     # print(leaf_y, leaf_x, leaf_height, leaf_width)
-#
-#     if centroids_leaf[i][1] > maxX:
-#         leaf_angle = math.atan(math.fabs(leaf_height - leaf_y) / math.fabs(leaf_x))
-#         plt.plot([0, leaf_x], [leaf_height, leaf_y])
-#     else:
-#         leaf_angle = math.atan(math.fabs(leaf_height - leaf_y) / math.fabs(leaf_width - leaf_x))
-#         plt.plot([leaf_width, leaf_x], [leaf_height, leaf_y])
-#
-#     array_angel.append(leaf_angle * 180 / math.pi)
-#     print("第",i+1,"个叶片的角度为：",leaf_angle * 180 / math.pi)
-#
-#     plt.imshow(opencv2skimage(leaf))
-#     plt.show()
+for i in range(len(img_leaf)):
+    leaf = img_leaf[i]
 
-# showImage(im)
+    k= 3
+    element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))  # 卷积核，定义一个3x3的十字形结构元素
+    while k>0:
+        leaf = cv2.erode(leaf, element)
+        k-=1
+
+    leaf_height, leaf_width = leaf.shape
+    leaf_y = int((2 / 3) * leaf_height)
+    leaf_x = int((2 / 3) * leaf_width)
+
+    for y in range(leaf_height):
+        if (y == leaf_y):
+            for x in range(leaf_width):
+                if (leaf[y, x] == 255):
+                    leaf_x = x
+                    break
+        if (y > leaf_y):
+            break
+    # print(leaf_y, leaf_x, leaf_height, leaf_width)
+
+    if centroids_leaf[i][1] > maxX:
+        leaf_angle = math.atan(math.fabs(leaf_height - leaf_y) / math.fabs(leaf_x))
+        plt.plot([0, leaf_x], [leaf_height, leaf_y],"r")
+    else:
+        leaf_angle = math.atan(math.fabs(leaf_height - leaf_y) / math.fabs(leaf_width - leaf_x))
+        plt.plot([leaf_width, leaf_x], [leaf_height, leaf_y],"r")
+
+    array_angel.append([i+1,leaf_angle * 180 / math.pi])
+    print("第",i+1,"个叶片的角度为：",leaf_angle * 180 / math.pi)
+
+    # plt.imshow(opencv2skimage(leaf))
+    # plt.show()
+
+data_angel = pd.DataFrame(array_angel)
+data_angel.to_csv('angel.csv',header=['blade','angle/°'],index=False)
+
+# 存储叶片长度
+array_length = []
 
 for leaf_i in range(len(img_leaf)):
     leaf1 = img_leaf[leaf_i]
@@ -315,12 +305,51 @@ for leaf_i in range(len(img_leaf)):
     area = sum(area_list)  # 求和计算曲线在t:[0,2*pi]的长度
     area = area/24*0.635   # 24个像素=0.635厘米
 
+    array_length.append([leaf_i+1,area])
     print("第",leaf_i+1,"个叶片：{:.4f}厘米".format(area))
 
     plt.plot(x, yvals, 'r')
-
     plt.imshow(opencv2skimage(leaf1))
     plt.show()
+
+data_angel = pd.DataFrame(array_length)
+data_angel.to_csv('length.csv',header=['blade','length/cm'],index=False)
+
+#
+# # 求植株高度
+# img_plant = im.copy()
+# img_plant_height = img_plant.shape[0]
+# img_plant_width = img_plant.shape[1]
+#
+# location_top = img_plant_height
+# location_bottom = 0
+# location_level = 0
+#
+# for i in range(img_plant_height):
+#     for j in range(img_plant_width):
+#         if img_plant[i,j]==255:
+#             location_top=i
+#             location_level=j
+#             break
+#     if location_top==i:
+#         break
+#
+# for i in range(img_plant_height-1,-1,-1):
+#     for j in range(img_plant_width):
+#         if img_plant[i,j]==255:
+#             location_bottom = i
+#             break
+#     if location_bottom==i:
+#         break
+#
+# plant_height = location_bottom - location_top
+# plant_height = plant_height/24*0.635
+# print("高度为：{:.4f}厘米".format(plant_height))
+#
+# plt.imshow(opencv2skimage(img_plant))
+# plt.plot([location_level,location_level],[location_bottom,location_top],"r")
+# plt.show()
+
 
 
 
