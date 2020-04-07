@@ -37,7 +37,10 @@ def showImage(img):
     img_show.show()
 
 # 读取图片
-img_png = Image.open('images/20180709.png')
+filepath = 'images/'
+filename = '20180709'
+filetype = '.png'
+img_png = Image.open(filepath+filename+filetype)
 
 # 将PIL格式转换为np矩阵
 img = np.asarray(img_png)
@@ -90,7 +93,9 @@ img_cut = ImageEnhance.Contrast(img_cut).enhance(1.5)  # 锐化增强
 # 二值化反转
 img_cut = np.asarray(img_cut)
 ret,img_cut = cv2.threshold(img_cut, 175, 255, cv2.THRESH_BINARY_INV)
-
+chull = morphology.convex_hull_image(opencv2skimage(img_cut))
+plt.imshow(chull)
+plt.show()
 # 骨架提取
 element = cv2.getStructuringElement(cv2.MORPH_CROSS,(3,3)) #卷积核，定义一个3x3的十字形结构元素
 
@@ -256,7 +261,7 @@ for i in range(len(img_leaf)):
         if (y > leaf_y):
             break
     # print(leaf_y, leaf_x, leaf_height, leaf_width)
-
+    plt.imshow(opencv2skimage(leaf))
     if centroids_leaf[i][1] > maxX:
         leaf_angle = math.atan(math.fabs(leaf_height - leaf_y) / math.fabs(leaf_x))
         plt.plot([0, leaf_x], [leaf_height, leaf_y],"r")
@@ -265,13 +270,16 @@ for i in range(len(img_leaf)):
         plt.plot([leaf_width, leaf_x], [leaf_height, leaf_y],"r")
 
     array_angel.append([i+1,leaf_angle * 180 / math.pi])
-    print("第",i+1,"个叶片的角度为：",leaf_angle * 180 / math.pi)
+    print("第",i+1,"个叶片的角度为：{:.4f}".format(leaf_angle * 180 / math.pi))
 
-    # plt.imshow(opencv2skimage(leaf))
+    angle_num = str(i + 1)
+    angle_savepath = 'angle_pic/'
+    plt.savefig(angle_savepath + filename + '_angle_blade' + angle_num + filetype)
+    plt.clf()
     # plt.show()
 
 data_angel = pd.DataFrame(array_angel)
-data_angel.to_csv('angel.csv',header=['blade','angle/°'],index=False)
+data_angel.to_csv(filename+'_angle.csv',header=['blade','angle/°'],index=False,encoding="gbk")
 
 # 存储叶片长度
 array_length = []
@@ -308,46 +316,52 @@ for leaf_i in range(len(img_leaf)):
     array_length.append([leaf_i+1,area])
     print("第",leaf_i+1,"个叶片：{:.4f}厘米".format(area))
 
-    plt.plot(x, yvals, 'r')
     plt.imshow(opencv2skimage(leaf1))
-    plt.show()
+    plt.plot(x, yvals, 'r')
 
-data_angel = pd.DataFrame(array_length)
-data_angel.to_csv('length.csv',header=['blade','length/cm'],index=False)
+    length_num = str(leaf_i + 1)
+    length_savepath = 'length_pic/'
+    plt.savefig(length_savepath + filename+'_length_blade' + length_num + filetype)
+    plt.clf()
+    # plt.show()
 
-#
-# # 求植株高度
-# img_plant = im.copy()
-# img_plant_height = img_plant.shape[0]
-# img_plant_width = img_plant.shape[1]
-#
-# location_top = img_plant_height
-# location_bottom = 0
-# location_level = 0
-#
-# for i in range(img_plant_height):
-#     for j in range(img_plant_width):
-#         if img_plant[i,j]==255:
-#             location_top=i
-#             location_level=j
-#             break
-#     if location_top==i:
-#         break
-#
-# for i in range(img_plant_height-1,-1,-1):
-#     for j in range(img_plant_width):
-#         if img_plant[i,j]==255:
-#             location_bottom = i
-#             break
-#     if location_bottom==i:
-#         break
-#
-# plant_height = location_bottom - location_top
-# plant_height = plant_height/24*0.635
-# print("高度为：{:.4f}厘米".format(plant_height))
-#
-# plt.imshow(opencv2skimage(img_plant))
-# plt.plot([location_level,location_level],[location_bottom,location_top],"r")
+data_length = pd.DataFrame(array_length)
+data_length.to_csv(filename+'_length.csv',header=['blade','length/cm'],index=False,encoding='gbk')
+
+# 求植株高度
+img_plant = im.copy()
+img_plant_height = img_plant.shape[0]
+img_plant_width = img_plant.shape[1]
+
+location_top = img_plant_height
+location_bottom = 0
+location_level = 0
+
+for i in range(img_plant_height):
+    for j in range(img_plant_width):
+        if img_plant[i,j]==255:
+            location_top=i
+            location_level=j
+            break
+    if location_top==i:
+        break
+
+for i in range(img_plant_height-1,-1,-1):
+    for j in range(img_plant_width):
+        if img_plant[i,j]==255:
+            location_bottom = i
+            break
+    if location_bottom==i:
+        break
+
+plant_height = location_bottom - location_top
+plant_height = plant_height/24*0.635
+print("高度为：{:.4f}厘米".format(plant_height))
+
+plt.imshow(opencv2skimage(img_plant))
+plt.plot([location_level,location_level],[location_bottom,location_top],"r")
+plt.savefig(filename+'_height'+filetype)
+plt.clf()
 # plt.show()
 
 

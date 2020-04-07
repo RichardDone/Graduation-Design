@@ -33,24 +33,6 @@ def resize( w_box, h_box, pil_image): #参数是：要适应的窗口宽、高�
       height = int(h*factor)
       return pil_image.resize((width, height), Image.ANTIALIAS)
 
-#卷积函数
-def conv(image, weight):
-    image1=np.array(image)
-    height, width = image1.shape[0],image1.shape[1]
-    h, w = weight.shape
-    # 经滑动卷积操作后得到的新的图像的尺寸
-    new_h = height -h + 1
-    new_w = width -w + 1
-    new_image = np.zeros((height, width),dtype=np.float)
-    # 进行卷积操作,实则是对应的窗口覆盖下的矩阵对应元素值相乘,卷积操作
-    for i in range(new_h):
-        for j in range(new_w):
-            new_image[i+1, j+1] = abs(np.sum(image1[i:i+h, j:j+w] * weight))
-    # 去掉矩阵乘法后的小于0的和大于255的原值,重置为0和255
-    new_image = new_image.clip(0, 255)
-    new_image = np.rint(new_image).astype('uint8')
-    return new_image
-
 
 #基础功能模块
 
@@ -278,14 +260,6 @@ def ImgHough_line():
         cv2.line(im, (x1, y1), (x2, y2), (0, 0, 255), 2)  # 点的坐标必须是元组，不能是列表。
     cv2.imshow("image-lines", im)
 
-    # # 统计概率霍夫线变换
-    # edges = cv2.Canny(im, 50, 150, apertureSize=3)  # apertureSize参数默认其实就是3
-    # lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 60, minLineLength=60, maxLineGap=5)
-    # for line in lines:
-    #     x1, y1, x2, y2 = line[0]
-    #     cv2.line(im, (x1, y1), (x2, y2), (0, 0, 255), 2)
-    # cv2.imshow("line_detect_possible_demo", im)
-
     # 将opencv格式转换回PIL
     img_png = Image.fromarray(im)
 
@@ -293,98 +267,6 @@ def ImgHough_line():
     photo = ImageTk.PhotoImage(img_png)
     canvas.create_image(int(window.winfo_width() / 2), 0, anchor='n', image=photo)
     canvas.image = photo
-#Log图像锐化
-def Logsharpen():
-    global img_png
-    global img_tep
-    img_tep = img_png.copy()
-    #img_png=img_png.filter(ImageFilter.GaussianBlur(radius=1))  #高斯平滑
-
-
-    #高斯滤波器
-    kernel_3x3 = np.array([
-        [1, 2, 1],
-        [2, 4, 2],
-        [1, 2, 1]
-    ])
-    kernel_3x3 = kernel_3x3 / kernel_3x3.sum()  #加权平均
-
-    # 高通滤波器与图片进行卷积
-    img_png=conv(img_png,kernel_3x3)
-
-    #拉普拉斯算子变换
-    img_png=np.array(img_png)
-    r, c = img_png.shape[0],img_png.shape[1]
-    new_image = np.zeros((r, c))
-    L_sunzi = np.array([[0, -1, 0], [-1, 4, -1], [0, -1, 0]])
-    #L_sunnzi = np.array([[1,1,1],[1,-8,1],[1,1,1]])
-    for i in range(r-2):
-        for j in range(c-2):
-            new_image[i+1, j+1] = abs(np.sum(img_png[i:i + 3, j:j + 3] * L_sunzi))
-
-    # 将图片由np数组格式转换为Image格式
-    img_png=Image.fromarray(np.uint8(new_image))
-    #展示到画布中
-    canvas.delete(ALL)
-    photo = ImageTk.PhotoImage(img_png)
-    canvas.create_image(int(Mywidth / 2), 0, anchor='n', image=photo)
-    canvas.image = photo
-
-#Ostu阈值分割
-def ImgOstu():
-    global img_png
-    global img_tep
-    img_tep = img_png.copy()
-
-    img_png = np.array(img_png)
-    Imgh,Imgw = img_png.shape[0],img_png.shape[1]
-    MN = Imgh*Imgw
-    avgValue = 0.0
-    nHistogram = [0] * 256  #灰度直方图
-    fHistogram = [0] * 256  #归一化直方图
-    #求灰度直方图
-    for i in range(Imgh):
-        for j in range(Imgw):
-            pixel=int(img_png[i][j])
-            nHistogram[pixel]=nHistogram[pixel]+1
-    #灰度直方图归一化，并且求取整幅图像平均灰度average
-    for i in range(256):
-        fHistogram[i]=nHistogram[i]/float(MN)
-        avgValue=avgValue+fHistogram[i]*i
-
-    threshold = 0      #阈值
-    maxVariance = 0.0
-    w = 0.0
-    u = 0.0
-    for i in range(256):
-        w = w + fHistogram[i]     #假设当前灰度i为阈值, 0~i 灰度的像素(假设像素值在此范围的像素叫做前景像素) 所占整幅图像的比例
-        u = u + fHistogram[i]*i    #灰度i之前的像素(0~i)的平均灰度值： 前景像素的平均灰度值
-
-        t = avgValue*w-u
-        if w!=0 and w!=1:
-            variance = t * t / (w * (1 - w))
-            if variance > maxVariance:
-                maxVariance = variance
-                threshold = i   #Ostu阈值
-
-    img_png = Image.fromarray(np.uint8(img_png))
-    img_png = img_png.point(lambda p: p > threshold and 255)
-
-    # 展示到画布中
-    canvas.delete(ALL)
-    photo = ImageTk.PhotoImage(img_png)
-    canvas.create_image(int(Mywidth / 2), 0, anchor='n', image=photo)
-    canvas.image = photo
-# 1、计算直方图并归一化histogram
-# 2、计算图像灰度均值avgValue.
-# 3、计算直方图的零阶w[i]和一级矩u[i]
-# 4、计算并找到最大的类间方差（between-class variance）
-# variance[i]=(avgValue*w[i]-u[i])*(avgValue*w[i]-u[i])/(w[i]*(1-w[i]))
-# 对应此最大方差的灰度值即为要找的阈值
-# 5、用找到的阈值二值化图像
-
-
-
 
 #第1步，建立窗口window
 window=Tk()
@@ -425,8 +307,6 @@ funmenu.add_command(label='图像二值化反转', command=ImgBinary_INV)
 funmenu.add_command(label='骨架提取', command=ImgSkeleton)
 funmenu.add_command(label='去除噪点', command=ImgNoiseRemoval)
 funmenu.add_command(label='霍夫变换', command=ImgHough_line)
-funmenu.add_command(label='LoG算子图像锐化', command=Logsharpen)
-funmenu.add_command(label='Ostu图像分割', command=ImgOstu)
 menubar.add_cascade(label='功能',menu=funmenu)
 
 #第9步，创建一个帮助菜单
