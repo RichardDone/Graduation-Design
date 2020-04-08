@@ -93,9 +93,9 @@ img_cut = ImageEnhance.Contrast(img_cut).enhance(1.5)  # 锐化增强
 # 二值化反转
 img_cut = np.asarray(img_cut)
 ret,img_cut = cv2.threshold(img_cut, 175, 255, cv2.THRESH_BINARY_INV)
-chull = morphology.convex_hull_image(opencv2skimage(img_cut))
-plt.imshow(chull)
-plt.show()
+# chull = morphology.convex_hull_image(opencv2skimage(img_cut))
+# plt.imshow(chull)
+# plt.show()
 # 骨架提取
 element = cv2.getStructuringElement(cv2.MORPH_CROSS,(3,3)) #卷积核，定义一个3x3的十字形结构元素
 
@@ -279,7 +279,7 @@ for i in range(len(img_leaf)):
     # plt.show()
 
 data_angel = pd.DataFrame(array_angel)
-data_angel.to_csv(filename+'_angle.csv',header=['blade','angle/°'],index=False,encoding="gbk")
+data_angel.to_csv(filename+'_angle.csv',header=['blade','angle/°'],index=False,encoding="gbk",float_format="%.4f")
 
 # 存储叶片长度
 array_length = []
@@ -326,7 +326,7 @@ for leaf_i in range(len(img_leaf)):
     # plt.show()
 
 data_length = pd.DataFrame(array_length)
-data_length.to_csv(filename+'_length.csv',header=['blade','length/cm'],index=False,encoding='gbk')
+data_length.to_csv(filename+'_length.csv',header=['blade','length/cm'],index=False,encoding='gbk',float_format="%.4f")
 
 # 求植株高度
 img_plant = im.copy()

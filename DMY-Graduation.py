@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Author: DMY
-Last edited: June 13,2019
+Author: Richard_Done
+Last edited: April 8,2020
 """
-import PIL
-import tkinter as tk
 import matplotlib.pyplot as plt
 import cv2
-from skimage import morphology,draw
 import numpy as np
+import pandas as pd
+import math
+from skimage import measure,color,morphology,img_as_ubyte,img_as_float,transform
+
 from tkinter import filedialog
 from tkinter import *
 from PIL import Image,ImageTk,ImageFilter,ImageEnhance
@@ -16,12 +17,36 @@ import win32clipboard as clip
 import win32con     #pip install pywin32
 from io import BytesIO
 
-
+global img_all
+img_all = []
 global img_tep
 global img_png           # 定义全局变量图像的
+global filename
 Myheight= 600    #高
 Mywidth= 800     #宽
 
+def opencv2pil(any_opencv_image):
+    pil_img = Image.fromarray(any_opencv_image)
+    return pil_img
+
+def pil2opencv(any_pil_image):
+    op_image = np.asarray(any_pil_image)
+    return op_image
+
+def opencv2skimage(any_opencv_image):
+    sk_image = img_as_float(any_opencv_image)
+    return sk_image
+
+def skimage2opencv(any_skimage_image):
+    op_image = img_as_ubyte(any_skimage_image)
+    return op_image
+
+def angle(x1,y1,x2,y2):
+    if y1==y2:
+        len=9999
+    else:
+        len = (math.fabs(x1-x2)/math.fabs(y1-y2))
+    return len
 
 #图片自适应画布大小
 def resize( w_box, h_box, pil_image): #参数是：要适应的窗口宽、高、Image.open后的图片
@@ -33,24 +58,30 @@ def resize( w_box, h_box, pil_image): #参数是：要适应的窗口宽、高�
       height = int(h*factor)
       return pil_image.resize((width, height), Image.ANTIALIAS)
 
+def showImage(img):
+    img_show = img.copy()
+    img_show = resize(window.winfo_width(), window.winfo_height(),img_show)
+    canvas.delete(ALL)
+    photo = ImageTk.PhotoImage(img_show)
+    canvas.create_image(int(window.winfo_width() / 2), 0, anchor='n', image=photo)  # 图片锚定点（n图片顶端的中间点位置）放在画布（400,0）坐标处
+    canvas.image = photo
 
 #基础功能模块
 
 #打开图片
 def openfiles():
     global img_png
-    global Imgwidth #图片原本宽度
-    global Imgheight  #图片原本高度
-    file_path = filedialog.askopenfilename(title='选择文件',filetype=[('all files', '.*'),('JPG','.jpg'),('PNG','png')])
+    global filename
+
+    file_path = filedialog.askopenfilename(title='选择文件',filetype=[('all files', '.*'),('JPG','jpg'),('PNG','png')])
     if file_path!='':
         print("打开路径",file_path)
+        file = file_path.split('/')
+        filename,filetype = file[len(file)-1].split('.')
+        print(filename,filetype)
         img_png = Image.open(file_path)
-        canvas.delete(ALL)
-        Imgwidth,Imgheight = img_png.size
-        img_png=resize(window.winfo_width() ,window.winfo_height() ,img_png)
-        photo=ImageTk.PhotoImage(img_png)
-        canvas.create_image(int(window.winfo_width() /2),0,anchor='n',image=photo)   # 图片锚定点（n图片顶端的中间点位置）放在画布（400,0）坐标处
-        canvas.image=photo
+        img_all.append(img_png)
+        showImage(img_png)
 
         global img_tep
         img_tep=img_png.copy()
@@ -64,7 +95,7 @@ def openfiles():
 def savefiles():
     global img_png
     file_path = filedialog.asksaveasfilename(title='保存文件', filetypes=[("PNG", ".png")])
-    img_png=img_png.resize((Imgwidth,Imgheight))
+
     if file_path!='':
         print("保存路径",file_path)
         img_png.save(str(file_path) + '.png', 'PNG')
@@ -110,9 +141,8 @@ def Imghelp():
     top.title('关于')
     longtext="""
     Software Information
-    DIP1.0
-    Author: DMY
-    Last edited: June 13,2019
+    Author: Richard_Done
+    Last edited: April,8,2020
     """
     Textlabel=Label(top,anchor='s',text=longtext,font=('微软雅黑',15),width=40,height=30)
     Textlabel.pack()
@@ -120,30 +150,51 @@ def Imghelp():
 
 #图像处理功能实现模块
 
+#裁剪图像，将植株提取出来
+def ImgCut():
+    global img_png
+
+    # 将PIL格式转换为np矩阵
+    img = np.asarray(img_png)
+    # 灰度化
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # 二值化
+    ret, binary = cv2.threshold(gray, 175, 255, cv2.THRESH_BINARY)
+    # 读取轮廓
+    img1, contours, hierarchy = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    left_x = 0  # 左上角横坐标
+    left_y = 0  # 左上角纵坐标
+    wid = 0  # 矩形宽度
+    hei = 0  # 矩形高度
+
+    for i in range(0, len(contours)):
+        x, y, w, h = cv2.boundingRect(contours[i])
+        if (w * h) > 30000 and (w * h) < 5000000 and h < 2000:
+            # print(x,y,w,h)
+            left_x = x
+            left_y = y
+            wid = w
+            hei = h
+            cv2.rectangle(img, (x - 60, y - 50), (x + w + 80, y + h), (0, 0, 255), 2)
+
+    # 显示带轮廓的原图像
+    # img_png = Image.fromarray(img)
+    # resize(800,600,img_png)
+    # img_png.show()
+
+    # 裁剪图像，显示的就是
+    img_cut = img_png.crop((left_x - 60, left_y - 50, left_x + wid + 80, left_y + hei))
+    img_all.append(img_cut)
+    showImage(img_cut)
+
 #图像灰度化+图像增强
 def ImgGrayEhance():
     global img_png
     global img_tep
     img_tep=img_png.copy()
 
-    img = np.asarray(img_png)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    ret, binary = cv2.threshold(gray, 175, 255, cv2.THRESH_BINARY)
-
-    img1, contours, hierarchy = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    print(type(contours))
-    print(type(contours[0]))
-    print(len(contours))
-    for i in range(71, len(contours)):
-        x, y, w, h = cv2.boundingRect(contours[i])
-        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 2)
-    # x, y, w, h = cv2.boundingRect(contours[52])
-    # print(x,y,x+w,y+h)
-    # cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 255), 1)
-
-    # cv2.drawContours(img, contours, -1, (0, 0, 255), 1)
-    cv2.imshow("img", img)
+    img_png = img_all[len(img_all)-1]
 
     # 图像灰度化
     img_png = img_png.convert('L')    #调用Image中的函数
@@ -154,10 +205,14 @@ def ImgGrayEhance():
     img_png = ImageEnhance.Contrast(img_png).enhance(1.5)  # 对比度增强
     img_png = ImageEnhance.Contrast(img_png).enhance(1.5)  # 锐化增强
 
-    canvas.delete(ALL)
-    photo = ImageTk.PhotoImage(img_png)
-    canvas.create_image(int(window.winfo_width() /2),0,anchor='n',image=photo)
-    canvas.image=photo
+    # 二值化反转
+    img_png = np.asarray(img_png)
+    ret, img_png = cv2.threshold(img_png, 175, 255, cv2.THRESH_BINARY_INV)
+
+    img_png = opencv2pil(img_png)
+
+    img_all.append(img_png)
+    showImage(img_png)
 
 # 图像二值化反转
 def ImgBinary_INV():
@@ -302,6 +357,7 @@ menubar.add_cascade(label='编辑',menu=editmenu)
 
 #第8步，创建一个功能菜单
 funmenu=Menu(menubar,tearoff=0)
+funmenu.add_command(label='图像裁剪', command=ImgCut)
 funmenu.add_command(label='图像灰度化和增强', command=ImgGrayEhance)
 funmenu.add_command(label='图像二值化反转', command=ImgBinary_INV)
 funmenu.add_command(label='骨架提取', command=ImgSkeleton)
