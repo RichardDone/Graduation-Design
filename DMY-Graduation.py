@@ -175,7 +175,7 @@ def ImgCut():
     img_cut = img_png.crop((left_x - 60, left_y - 50, left_x + wid + 80, left_y + hei))
     img_all.append(img_cut)
     showImage(img_cut)
-    img_cut.save(filename+"_裁剪."+filetype)
+    img_cut.save(filename+"_1裁剪."+filetype)
 
 #图像灰度化+图像增强+二值化
 def ImgGrayEhanceINV():
@@ -200,7 +200,7 @@ def ImgGrayEhanceINV():
     img_png = opencv2pil(img_png)
     img_all.append(img_png)
     showImage(img_png)
-    img_png.save(filename+"_预处理."+filetype)
+    img_png.save(filename+"_2预处理."+filetype)
 
 # 骨架提取+去噪
 def ImgSkeleton_RemoveNoise():
@@ -246,7 +246,7 @@ def ImgSkeleton_RemoveNoise():
     img_png = opencv2pil(img_png)
     img_all.append(img_png)
     showImage(img_png)
-    img_png.save(filename + "_骨架提取." + filetype)
+    img_png.save(filename + "_3骨架提取." + filetype)
 
 # 提取叶片
 def LeafExtract():
@@ -289,7 +289,7 @@ def LeafExtract():
     img_all.append(img_png)
     showImage(img_png)
 
-    img_png.save(filename + "_叶片提取." + filetype)
+    img_png.save(filename + "_4叶片提取." + filetype)
 
     # 标记叶片
     img_extract = im3.copy()
@@ -333,7 +333,7 @@ def LeafExtract():
     img_all.append(img_png)
     showImage(img_png)
 
-    img_png.save(filename + "_叶片标记." + filetype)
+    img_png.save(filename + "_5叶片标记." + filetype)
 
     print("叶片的数量为：", len(img_leaf))
     messagebox.showinfo('叶片数量', '叶片数量为：9')
