@@ -3,6 +3,7 @@
 Author: Richard_Done
 Last edited: April 8,2020
 """
+import os
 import matplotlib.pyplot as plt
 import cv2
 import numpy as np
@@ -147,6 +148,12 @@ def Imghelp():
 def ImgCut():
     global img_png
 
+    path = filename + '_plant'
+    isExists = os.path.exists(path)
+
+    if not isExists:
+        os.makedirs(path)
+
     # 将PIL格式转换为np矩阵
     img = np.asarray(img_png)
     # 灰度化
@@ -175,11 +182,12 @@ def ImgCut():
     img_cut = img_png.crop((left_x - 60, left_y - 50, left_x + wid + 80, left_y + hei))
     img_all.append(img_cut)
     showImage(img_cut)
-    img_cut.save(filename+"_1裁剪."+filetype)
+    img_cut.save(filename+'_plant/'+filename+"_1裁剪."+filetype)
 
 #图像灰度化+图像增强+二值化
 def ImgGrayEhanceINV():
     global img_png
+    global img_aera
 
     img_png = img_all[len(img_all)-1]
 
@@ -188,19 +196,19 @@ def ImgGrayEhanceINV():
 
     # 图像增强
     img_png = ImageEnhance.Brightness(img_png).enhance(1.0)  # 亮度增强 1.0为原始图像
-    img_png = ImageEnhance.Color(img_png).enhance(1.0)  # 色度增强 1.0为原始图像
-    img_png = ImageEnhance.Contrast(img_png).enhance(1.5)  # 对比度增强
-    img_png = ImageEnhance.Contrast(img_png).enhance(1.5)  # 锐化增强
+    img_png = ImageEnhance.Color(img_png).enhance(800.0)  # 色度增强 1.0为原始图像
+    img_png = ImageEnhance.Contrast(img_png).enhance(15.5)  # 对比度增强
 
     # 二值化反转
     img_png = np.asarray(img_png)
     ret, img_png = cv2.threshold(img_png, 175, 255, cv2.THRESH_BINARY_INV)
+    img_aera = img_png.copy()
 
     # opencv转化为PIL
     img_png = opencv2pil(img_png)
     img_all.append(img_png)
     showImage(img_png)
-    img_png.save(filename+"_2预处理."+filetype)
+    img_png.save(filename+'_plant/'+ filename+"_2预处理."+filetype)
 
 # 骨架提取+去噪
 def ImgSkeleton_RemoveNoise():
@@ -246,9 +254,9 @@ def ImgSkeleton_RemoveNoise():
     img_png = opencv2pil(img_png)
     img_all.append(img_png)
     showImage(img_png)
-    img_png.save(filename + "_3骨架提取." + filetype)
+    img_png.save(filename+'_plant/'+ filename + "_3骨架提取." + filetype)
 
-# 提取叶片
+# 提取叶片信息
 def LeafExtract():
     global img_png
 
@@ -289,11 +297,11 @@ def LeafExtract():
     img_all.append(img_png)
     showImage(img_png)
 
-    img_png.save(filename + "_4叶片提取." + filetype)
+    img_png.save(filename+'_plant/'+ filename + "_4叶片提取." + filetype)
 
     # 标记叶片
     img_extract = im3.copy()
-    element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))  # 卷积核，定义一个5x5的十字形结构元素
+    element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))  # 卷积核，定义一个3x3的十字形结构元素
     i = 5
     while i > 0:
         img_extract = cv2.dilate(img_extract, element)
@@ -307,6 +315,9 @@ def LeafExtract():
 
     # 定义数组存储质心坐标
     centroids_leaf = []
+
+    # 定义数组存储外接矩形坐标
+    bbox = []
 
     # 通过label标记，遍历各个连通域
     for region in measure.regionprops(labels):
@@ -323,6 +334,10 @@ def LeafExtract():
         else:
             # 存储质心坐标
             centroids_leaf.append(region.centroid)
+
+            # 存储矩形坐标
+            bbox.append(region.bbox)
+
             cv2.rectangle(img_extract, (minc, minr), (maxc, maxr), (255, 255, 255), 2)
             for t in location:
                 leaf_test[t[0], t[1]] = 255
@@ -332,13 +347,93 @@ def LeafExtract():
     img_png = opencv2pil(img_extract)
     img_all.append(img_png)
     showImage(img_png)
+    img_png.save(filename+'_plant/'+ filename + "_5叶片标记." + filetype)
 
-    img_png.save(filename + "_5叶片标记." + filetype)
+    # print("叶片的数量为：", len(img_leaf))
+    messagebox.showinfo('叶片数量', '叶片数量为：{}'.format(len(img_leaf)))
 
-    print("叶片的数量为：", len(img_leaf))
-    messagebox.showinfo('叶片数量', '叶片数量为：9')
+    # 创建存储数据文件夹
+    data_path = filename+ '_plant/data_csv'
+    isExists = os.path.exists(data_path)
+
+    if not isExists:
+        os.makedirs(data_path)
+
+
+    # 存储叶片基部点坐标
+    array_bottompoint = []
+
+    for i in range(len(img_leaf)):
+        leaf = img_leaf[i]
+        k = 3
+        element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))  # 卷积核，定义一个3x3的十字形结构元素
+        while k > 0:
+            leaf = cv2.erode(leaf, element)
+            k -= 1
+
+        flag = 0
+        leaf_height, leaf_width = leaf.shape
+
+        if centroids_leaf[i][1] > maxX:
+            for y in range(leaf_height - 1, -1, -1):
+                for x in range(leaf_width):
+                    if (leaf[y, x] == 255):
+                        array_bottompoint.append([i + 1, y + bbox[i][0], x + bbox[i][1]])
+                        flag = 1
+                        # print("第", i + 1, "个叶片的基部点坐标：", "Height:", array_bottompoint[i][1], "Width:",
+                        #       array_bottompoint[i][2])
+                        break
+                if (flag):
+                    break
+        else:
+            for y in range(leaf_height - 1, -1, -1):
+                for x in range(leaf_width - 1, -1, -1):
+                    if (leaf[y, x] == 255):
+                        array_bottompoint.append([i + 1, y + bbox[i][0], x + bbox[i][1]])
+                        flag = 1
+                        # print("第", i + 1, "个叶片的基部点坐标：", "Height:", array_bottompoint[i][1], "Width:",
+                        #       array_bottompoint[i][2])
+                        break
+                if (flag):
+                    break
+    data_toppoint = pd.DataFrame(array_bottompoint)
+    data_toppoint.to_csv(filename+ '_plant/data_csv/'+ filename + '_bottompoint.csv', header=['blade', 'height/pixel', 'width/pixel'], index=False,
+                         encoding="gbk")
+
+    # 存储每个叶片的最高点坐标
+    array_toppoint = []
+
+    for i in range(len(img_leaf)):
+        leaf = img_leaf[i]
+        k = 3
+        element = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3))  # 卷积核，定义一个3x3的十字形结构元素
+        while k > 0:
+            leaf = cv2.erode(leaf, element)
+            k -= 1
+
+        flag = 0
+        leaf_height, leaf_width = leaf.shape
+        for y in range(leaf_height):
+            for x in range(leaf_width):
+                if (leaf[y, x] == 255):
+                    array_toppoint.append([i+1,y+bbox[i][0],x+bbox[i][1]])
+                    flag =1
+                    # print("第", i + 1, "个叶片的最高点坐标为：", "Height:", y + bbox[i][1], "Width:", x + bbox[i][2])
+                    break
+            if(flag):
+                break
+
+    data_toppoint = pd.DataFrame(array_toppoint)
+    data_toppoint.to_csv(filename+ '_plant/data_csv/' +filename + '_toppoint.csv', header=['blade','height/pixel', 'width/pixel'], index=False, encoding="gbk")
 
     # 存储叶片角度
+    path = filename+ '_plant/angle_pic'
+    isExists = os.path.exists(path)
+
+    if not isExists:
+        os.makedirs(path)
+
+
     array_angel = []
 
     for i in range(len(img_leaf)):
@@ -372,17 +467,23 @@ def LeafExtract():
             plt.plot([leaf_width, leaf_x], [leaf_height, leaf_y], "r")
 
         array_angel.append([i + 1, leaf_angle * 180 / math.pi])
-        print("第", i + 1, "个叶片的角度为：{:.4f}".format(leaf_angle * 180 / math.pi))
+        # print("第", i + 1, "个叶片的角度为：{:.4f}".format(leaf_angle * 180 / math.pi))
 
         angle_num = str(i + 1)
-        angle_savepath = 'angle_pic/'
+        angle_savepath = filename + '_plant/angle_pic/'
         plt.savefig(angle_savepath + filename + '_angle_blade' + angle_num + "." + filetype)
         plt.clf()
 
     data_angel = pd.DataFrame(array_angel)
-    data_angel.to_csv(filename + '_angle.csv', header=['blade', 'angle/°'], index=False, encoding="gbk",float_format="%.4f")
+    data_angel.to_csv(filename + '_plant/data_csv/'+ filename + '_angle.csv', header=['blade', 'angle/°'], index=False, encoding="gbk",float_format="%.4f")
 
     # 存储叶片长度
+    path = filename + '_plant/length_pic'
+    isExists = os.path.exists(path)
+
+    if not isExists:
+        os.makedirs(path)
+
     array_length = []
 
     for leaf_i in range(len(img_leaf)):
@@ -415,20 +516,21 @@ def LeafExtract():
         area = area / 24 * 0.635  # 24个像素=0.635厘米
 
         array_length.append([leaf_i + 1, area])
-        print("第", leaf_i + 1, "个叶片：{:.4f}厘米".format(area))
+        # print("第", leaf_i + 1, "个叶片：{:.4f}厘米".format(area))
 
         plt.imshow(opencv2skimage(leaf1))
         plt.plot(x, yvals, 'r')
 
         length_num = str(leaf_i + 1)
-        length_savepath = 'length_pic/'
+        length_savepath = filename+'_plant/length_pic/'
         plt.savefig(length_savepath + filename + '_length_blade' + length_num + "."+ filetype)
         plt.clf()
 
     data_length = pd.DataFrame(array_length)
-    data_length.to_csv(filename + '_length.csv', header=['blade', 'length/cm'], index=False, encoding='gbk',float_format="%.4f")
+    data_length.to_csv(filename + '_plant/data_csv/'+filename + '_length.csv', header=['blade', 'length/cm'], index=False, encoding='gbk',float_format="%.4f")
 
-def PlantHeight():
+#植株高度和面积
+def Plant_Height_Aera():
     # 求植株高度
     img_plant = img_skel.copy()
     img_plant_height = img_plant.shape[0]
@@ -457,14 +559,36 @@ def PlantHeight():
 
     plant_height = location_bottom - location_top
     plant_height = plant_height / 24 * 0.635
-    print("高度为：{:.4f}厘米".format(plant_height))
-
-    messagebox.showinfo("植株高度","植株高度为：{:.4f}厘米".format(plant_height))
+    # print("高度为：{:.4f}厘米".format(plant_height))
+    messagebox.showinfo("植株高度", "植株高度为：{:.4f}厘米".format(plant_height))
 
     plt.imshow(opencv2skimage(img_plant))
     plt.plot([location_level, location_level], [location_bottom, location_top], "r")
-    plt.savefig(filename + '_height')
+    plt.savefig(filename+'_plant/'+filename + '_height')
     plt.clf()
+
+    # 求植株投影面积
+    img_height, img_width = img_aera.shape
+    aera = 0
+    for x in range(img_height):
+        for y in range(img_width):
+            if (img_aera[x, y] == 255):
+                aera += 1
+    # print("面积为：{}像素点".format(aera)
+    messagebox.showinfo("投影面积", "投影面积为：{}像素点".format(aera))
+
+
+    plant_info = []
+    plant_info.append([filename,plant_height,aera])
+    data_plant = pd.DataFrame(plant_info)
+    data_plant.to_csv(filename + '_plant/data_csv/' + filename + '_height_aera.csv', header=['plant', 'height/cm','aera/pixel'], index=False, encoding='gbk',float_format="%.4f")
+
+def Run():
+    ImgCut()
+    ImgGrayEhanceINV()
+    ImgSkeleton_RemoveNoise()
+    LeafExtract()
+    Plant_Height_Aera()
 
 
 #第1步，建立窗口window
@@ -505,7 +629,8 @@ funmenu.add_command(label='图像裁剪', command=ImgCut)
 funmenu.add_command(label='图像预处理', command=ImgGrayEhanceINV)
 funmenu.add_command(label='骨架提取', command=ImgSkeleton_RemoveNoise)
 funmenu.add_command(label='叶片提取', command=LeafExtract)
-funmenu.add_command(label='植株高度', command=PlantHeight)
+funmenu.add_command(label='植株高度和面积', command=Plant_Height_Aera)
+funmenu.add_command(label='一键运行', command=Run)
 menubar.add_cascade(label='功能',menu=funmenu)
 
 #第9步，创建一个帮助菜单
